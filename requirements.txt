@@ -2,4 +2,4 @@ Flask
 Flask-RESTful
 gunicorn
 python-dotenv
-line-bot-sdk
+line-bot-sdk>=2.3.0
