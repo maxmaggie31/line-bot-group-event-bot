@@ -2,6 +2,7 @@ from flask import Flask, request, abort
 from linebot import WebhookHandler, LineBotApi
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import *
+from linebot.models import Mention, Mentionee
 import os
 import threading
 import datetime
