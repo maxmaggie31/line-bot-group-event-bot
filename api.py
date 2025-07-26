@@ -5,6 +5,7 @@ from linebot.models import *
 import os
 import threading
 import datetime
+import time
 
 app = Flask(__name__)
 
@@ -83,17 +84,19 @@ def handle_unsend(event):
 
 # 每週一凌晨自動清空記錄
 def reset_unsend_count_weekly():
-    def schedule():
+    def weekly_clear():
         while True:
             now = datetime.datetime.now()
             next_monday = now + datetime.timedelta(days=(7 - now.weekday()))
             next_monday = next_monday.replace(hour=0, minute=0, second=0, microsecond=0)
             wait_seconds = (next_monday - now).total_seconds()
-            threading.Timer(wait_seconds, schedule).start()
+            print(f"🕒 等待 {wait_seconds:.0f} 秒後清除收回紀錄")
+            time.sleep(wait_seconds)
+
             weekly_unsend_count.clear()
             print("✅ 已清空本週收回次數記錄")
 
-    schedule()
+    threading.Thread(target=weekly_clear, daemon=True).start()
 
 reset_unsend_count_weekly()
 
