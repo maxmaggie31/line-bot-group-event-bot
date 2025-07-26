@@ -13,9 +13,8 @@ app = Flask(__name__)
 line_bot_api = LineBotApi(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
 handler = WebhookHandler(os.getenv("LINE_CHANNEL_SECRET"))
 
-# 記錄發訊者與 messageId 的關聯
+# 記錄 messageId 對應的 user_id 與 group_id
 message_user_map = {}
-# 記錄每週收回次數
 weekly_unsend_count = {}
 
 @app.route("/callback", methods=['POST'])
@@ -31,27 +30,20 @@ def callback():
 
     return 'OK'
 
-# 回覆文字訊息
+# 處理訊息事件（但不回覆）
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_id = event.source.user_id
     msg_id = event.message.id
     group_id = getattr(event.source, 'group_id', None)
 
-    # 記錄誰發了哪個 message
     if group_id:
         message_user_map[msg_id] = {
             'user_id': user_id,
             'group_id': group_id
         }
 
-    # 回應測試用
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=f"你說的是：{event.message.text}")
-    )
-
-# 處理訊息收回事件
+# 處理收回訊息事件
 @handler.add(UnsendEvent)
 def handle_unsend(event):
     msg_id = event.unsend.message_id
@@ -68,21 +60,25 @@ def handle_unsend(event):
     weekly_unsend_count[user_id] = count
 
     if count == 1:
-        # 第一次警告
         warn_text = f"⚠️ <@{user_id}> 本週你已經收回過一次訊息，請注意！"
         line_bot_api.push_message(group_id, TextSendMessage(text=warn_text))
     elif count >= 2:
-        # 第二次踢出
-        kick_text = f"🚫 <@{user_id}> 因為你本週收回兩次訊息，已被踢出群組。"
+        try:
+            profile = line_bot_api.get_group_member_profile(group_id, user_id)
+            display_name = profile.display_name
+        except Exception:
+            display_name = f"<@{user_id}>"
+
+        kick_text = f"🚫 用戶「{display_name}」因為本週收回兩次訊息，已被踢出群組。"
         try:
             line_bot_api.push_message(group_id, TextSendMessage(text=kick_text))
             line_bot_api.kickout_group_member(group_id, user_id)
         except Exception as e:
-            fail_text = f"⚠️ 嘗試踢出 <@{user_id}> 失敗，可能是 BOT 沒有管理員權限"
+            fail_text = f"⚠️ 嘗試踢出「{display_name}」失敗，可能是 BOT 沒有管理員權限"
             print(f"[ERROR] Kick failed: {e}")
             line_bot_api.push_message(group_id, TextSendMessage(text=fail_text))
 
-# 每週一凌晨自動清空記錄
+# 每週一凌晨清空收回次數
 def reset_unsend_count_weekly():
     def weekly_clear():
         while True:
